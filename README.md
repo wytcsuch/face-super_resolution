@@ -8,3 +8,7 @@
 ![image](example/2.png)
 ![image](example/3.png)
 ![image](example/4.png)
+
+### pretrained model
+链接：https://pan.baidu.com/s/1h76ojtkEiEMt-JSd5H0d9A 
+提取码：qwer
