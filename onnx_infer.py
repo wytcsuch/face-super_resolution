@@ -137,11 +137,11 @@ if __name__ == '__main__':
     运行环境base
     '''
     parser = argparse.ArgumentParser(description='Train Downscaling Models')
-    parser.add_argument('--test_txt', default='/home/yckj3822/face_data_generator-wyt/test_img/glint', type=str) 
+    parser.add_argument('--test_txt', default='./test_img/glint', type=str) 
     parser.add_argument('--batch_size', default=1, type=int) 
-    parser.add_argument('--onnx_dir', default='/home/yckj3822/wyt_SR.onnx', type=str) 
+    parser.add_argument('--onnx_dir', default='./wyt_SR.onnx', type=str) 
     parser.add_argument('--input_size', default=256, type=int)  #结果保存的文件夹名称
-    parser.add_argument('--save_dir', default='/home/yckj3822/face_data_generator-wyt/test_img/result_onnx', type=str)  #结果保存的文件夹名称
+    parser.add_argument('--save_dir', default='./test_img/result_onnx', type=str)  #结果保存的文件夹名称
     opt = parser.parse_args()
 
 
