@@ -1,5 +1,3 @@
-from __future__ import print_function, division
-from torchvision import transforms
 import argparse
 import os
 from torch.utils.data import Dataset
@@ -11,14 +9,6 @@ import time
 import numpy as np 
 import torch
 import torchvision.transforms as T
-
-# use PIL Image to read image
-def default_loader(path):
-    try:
-        img = Image.open(path)
-        return img.convert('RGB')
-    except:
-        print("Cannot read image: {}".format(path))
 
 
 def GetFileFromThisRootDir(dir,ext = None):
@@ -44,7 +34,7 @@ def Get_img_paths(path):
     out.sort()
     return out
 
-# define your Dataset. Assume each line in your .txt file is [name/tab/label], for example:0001.jpg 1
+
 class customData(Dataset):
     def __init__(self, txt_path, input_size):
         self.img_paths = Get_img_paths(txt_path)
@@ -119,29 +109,28 @@ class ONNXModel():
         # :param image_numpy:
         # :return:
         '''
-        # 输入数据的类型必须与模型一致,以下三种写法都是可以的
+        #
         # scores, boxes = self.onnx_session.run(None, {self.input_name: image_numpy})
         # scores, boxes = self.onnx_session.run(self.output_name, input_feed={self.input_name: iimage_numpy})
         input_feed = self.get_input_feed(self.input_name, image_numpy)
         # input_feed = {}
         # input_feed['input_images'] = np.expand_dims(image_numpy[0],0)
         # input_feed['ref_images'] = np.expand_dims(image_numpy[1],0)
-        a = self.onnx_session.run(self.output_name, input_feed=input_feed)
-        return a
+        output = self.onnx_session.run(self.output_name, input_feed=input_feed)
+        return output
 
 
 if __name__ == '__main__':
 
     '''
-    超分辨率利用onnx进行推断
-    运行环境base
+    超分辨率利用onnx进行推断(envir:base)
     '''
-    parser = argparse.ArgumentParser(description='Train Downscaling Models')
-    parser.add_argument('--test_txt', default='./test_img/glint', type=str) 
+    parser = argparse.ArgumentParser(description='face super resolution!')
+    parser.add_argument('--test_txt', default='/home/yckj3822/face_data_generator-wyt/test_img/glint', type=str) 
     parser.add_argument('--batch_size', default=1, type=int) 
-    parser.add_argument('--onnx_dir', default='./wyt_SR.onnx', type=str) 
+    parser.add_argument('--onnx_dir', default='/home/yckj3822/wyt_SR.onnx', type=str) 
     parser.add_argument('--input_size', default=256, type=int)  #结果保存的文件夹名称
-    parser.add_argument('--save_dir', default='./test_img/result_onnx', type=str)  #结果保存的文件夹名称
+    parser.add_argument('--save_dir', default='/home/yckj3822/face_data_generator-wyt/test_img/result_onnx2', type=str)  #结果保存的文件夹名称
     opt = parser.parse_args()
 
 
@@ -153,14 +142,14 @@ if __name__ == '__main__':
     #dataloader
     test_dataloders = torch.utils.data.DataLoader(test_datasets,
                                             batch_size=opt.batch_size,
-                                            num_workers=4,
+                                            num_workers=0,
                                             shuffle=False) 
     #读取onnx模型
     onnx_model = ONNXModel(opt.onnx_dir)
 
     times = []
     output = []
-    i = 1
+    i = 0
     for data in tqdm(test_dataloders):
         inputs, path = data
         name = os.path.basename(path[0])
@@ -171,13 +160,10 @@ if __name__ == '__main__':
         canon_im = canon_im[0][0]
         canon_im = (canon_im + 1.0)/2.0
         canon_im = np.clip(canon_im, 0, 1.0)
-        # canon_im = canon_im.transpose(1,2,0)
         canon_im = Image.fromarray(np.uint8(canon_im * 255))
-
 
         save_path = os.path.join(opt.save_dir, str(i) + '_'+name)
         canon_im.save(save_path, quality=95)
         i = i + 1
-print('finished')
-
-
+    
+    print('finish inference!')
