@@ -118,6 +118,7 @@ if __name__ == '__main__':
             T.ToTensor(),
             T.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
+    print('load model successfully!')
 
     if not os.path.exists(opt.save_dir):
         os.makedirs(opt.save_dir)
