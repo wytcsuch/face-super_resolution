@@ -1,15 +1,16 @@
 import argparse
 import os
-from torch.utils.data import Dataset
 from tqdm import tqdm
 from PIL import Image
 import onnxruntime
-import cv2
 import time
 import numpy as np 
 import torch
 import torchvision.transforms as T
+from facenet_pytorch.models.mtcnn import MTCNN
+from align_faces import align_face
 
+detector = MTCNN(margin=0, thresholds=[0.65, 0.75, 0.75], device='cpu')
 
 def GetFileFromThisRootDir(dir,ext = None):
     allfiles = []
@@ -33,27 +34,6 @@ def Get_img_paths(path):
     out = [imgpath.split(' ')[0] for imgpath in img_paths]
     out.sort()
     return out
-
-
-class customData(Dataset):
-    def __init__(self, txt_path, input_size):
-        self.img_paths = Get_img_paths(txt_path)
-        self.input_size = input_size
-        self.input_transform = T.Compose([
-            T.ToTensor(),
-            T.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-        ])
-
-    def __len__(self):
-        return len(self.img_paths)
-
-    def __getitem__(self, item):
-        img_path = self.img_paths[item]
-        img = Image.open(img_path)
-        if img.size[0] != self.input_size:
-            img = img.resize((self.input_size,self.input_size), Image.ANTIALIAS)
-        img = self.input_transform(img)
-        return img, img_path
 
 
 class ONNXModel():
@@ -125,45 +105,51 @@ if __name__ == '__main__':
     '''
     超分辨率利用onnx进行推断(envir:base)
     '''
-    parser = argparse.ArgumentParser(description='face super resolution!')
-    parser.add_argument('--test_txt', default='/home/yckj3822/face_data_generator-wyt/test_img/glint', type=str) 
+    parser = argparse.ArgumentParser(description='face super resolution')
+    parser.add_argument('--test_txt', default='./img', type=str) 
     parser.add_argument('--batch_size', default=1, type=int) 
-    parser.add_argument('--onnx_dir', default='/home/yckj3822/wyt_SR.onnx', type=str) 
-    parser.add_argument('--input_size', default=256, type=int)  #结果保存的文件夹名称
-    parser.add_argument('--save_dir', default='/home/yckj3822/face_data_generator-wyt/test_img/result_onnx2', type=str)  #结果保存的文件夹名称
+    parser.add_argument('--onnx_dir', default='./wyt_SR.onnx', type=str) 
+    parser.add_argument('--save_dir', default='./result', type=str)  
     opt = parser.parse_args()
 
+    #read onnx
+    onnx_model = ONNXModel(opt.onnx_dir)
+    input_transform = T.Compose([
+            T.ToTensor(),
+            T.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
 
     if not os.path.exists(opt.save_dir):
         os.makedirs(opt.save_dir)
 
-    #datsset
-    test_datasets = customData(opt.test_txt, opt.input_size)
-    #dataloader
-    test_dataloders = torch.utils.data.DataLoader(test_datasets,
-                                            batch_size=opt.batch_size,
-                                            num_workers=0,
-                                            shuffle=False) 
-    #读取onnx模型
-    onnx_model = ONNXModel(opt.onnx_dir)
+    img_paths = Get_img_paths(opt.test_txt)
 
-    times = []
-    output = []
-    i = 0
-    for data in tqdm(test_dataloders):
-        inputs, path = data
-        name = os.path.basename(path[0])
-        inputs = inputs.permute(0,2,3,1)
-        inputs = inputs.cpu().numpy()
-        canon_im = onnx_model.forward(inputs)
+    for img_path in tqdm(img_paths):
+        name = os.path.basename(img_path).split('.')[0]
+        img = Image.open(img_path)
 
-        canon_im = canon_im[0][0]
-        canon_im = (canon_im + 1.0)/2.0
-        canon_im = np.clip(canon_im, 0, 1.0)
-        canon_im = Image.fromarray(np.uint8(canon_im * 255))
+        #detect face and landmark
+        _, _, landmarks = detector.detect(img, landmarks=True) 
 
-        save_path = os.path.join(opt.save_dir, str(i) + '_'+name)
-        canon_im.save(save_path, quality=95)
-        i = i + 1
-    
+        if landmarks is None: continue
+        num_faces = landmarks.shape[0]
+        for j in range(num_faces):
+            lr = align_face(img, landmarks[j])
+
+            #data preprocess
+            inputs = input_transform(lr)
+            inputs = inputs.unsqueeze(0).permute(0,2,3,1)
+            inputs = inputs.cpu().numpy()
+
+            #inference
+            sr = onnx_model.forward(inputs)
+            sr = sr[0][0]
+            sr = (sr + 1.0)/2.0
+            sr = np.clip(sr, 0, 1.0)
+            sr = Image.fromarray(np.uint8(sr * 255))
+
+            #save
+            save_path = os.path.join(opt.save_dir, name + '_face_' + str(j).zfill(3) + '.png' )
+            sr.save(save_path, quality=95)
+
     print('finish inference!')
